@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><meta name="color-scheme" content="dark"><title>E-site · Wejście</title>
+<style id="esite-gate-style">
+*{box-sizing:border-box}html,body{min-height:100%;margin:0}body{background:#0f1116;color:#f2f0eb;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{min-height:100svh;display:grid;place-items:center;padding:28px}.entry{width:min(100%,420px)}.brand{font-size:28px;letter-spacing:-1.5px;font-weight:750;margin:0 0 64px}.brand span{color:#e9a785}.label{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#b7aba2}h1{font-size:clamp(34px,9vw,46px);font-weight:500;letter-spacing:-2px;line-height:1.12;margin:17px 0 17px}.intro{color:#aaa8ad;line-height:1.7;margin:0 0 30px}label{display:block;font-size:13px;margin-bottom:9px}input{width:100%;height:54px;padding:0 16px;border:1px solid #45454d;border-radius:10px;background:#181a22;color:#fff;font:inherit;outline:none}input:focus{border-color:#e9a785;box-shadow:0 0 0 3px #e9a78520}button{width:100%;height:54px;margin-top:12px;border:0;border-radius:10px;background:#e9a785;color:#191614;font:600 14px system-ui;cursor:pointer}button:hover{background:#f2b998}button:focus-visible{outline:3px solid #fff;outline-offset:3px}button:disabled{cursor:wait;opacity:.65}#entry-status{min-height:44px;line-height:1.5;margin:14px 0 0;font-size:13px;color:#d1c9c3}#entry-status[data-error]{color:#ffb4a6}.fine{margin-top:40px;color:#777780;font-size:12px;line-height:1.6}@media(prefers-reduced-motion:no-preference){button,input{transition:background .2s,border-color .2s}}
+</style></head><body><main><section class="entry" aria-labelledby="entry-title"><p class="brand">e-site<span>.</span></p><p class="label">Karol × Kinga</p><h1 id="entry-title">Dobrze Cię<br>widzieć.</h1><p class="intro">Wpisz hasło, aby zobaczyć stronę.</p><form id="entry-form"><label for="entry-password">Hasło dostępu</label><input id="entry-password" type="password" autocomplete="off" required autofocus><button id="entry-submit" type="submit">Otwórz stronę <span aria-hidden="true">↗</span></button><p id="entry-status" role="status" aria-live="polite"></p></form><p class="fine">Dostęp pozostaje otwarty w tej karcie do odświeżenia strony.</p></section></main>
+<script type="module">
+const form=document.querySelector('#entry-form'),field=document.querySelector('#entry-password'),button=document.querySelector('#entry-submit'),status=document.querySelector('#entry-status');
+let payloadPromise;
+const payload=()=>payloadPromise||(payloadPromise=fetch(new URL('payload.bin',location.href),{cache:'no-store'}).then(response=>{if(!response.ok)throw new Error('network');return response.arrayBuffer()}).catch(error=>{payloadPromise=null;throw error}));
+function bytes(value){const text=atob(value),data=new Uint8Array(text.length);for(let i=0;i<text.length;i++)data[i]=text.charCodeAt(i);return data}
+function localPath(value,base){if(value.startsWith(base))return'/'+value.slice(base.length);if(value.startsWith('/'))return value;if(/^(?:[a-z]+:|\/\/|#)/i.test(value))return null;return'/'+value.replace(/^\.\//,'')}
+async function openSite(archive){
+ const urls={},created=[];
+ const create=(path,data,type)=>{const url=URL.createObjectURL(new Blob([data],{type}));urls[path]=url;created.push(url);return url};
+ for(const file of archive.files)if(file.type!=='text/css')create(file.path,bytes(file.data),file.type);
+ for(const file of archive.files.filter(file=>file.type==='text/css')){
+  let css=new TextDecoder().decode(bytes(file.data));
+  css=css.replace(/url\(\s*(["']?)([^"')]+)\1\s*\)/g,(match,quote,value)=>{const path=localPath(value,archive.base);return path&&urls[path]?'url("'+urls[path]+'")':match});
+  create(file.path,css,file.type);
+ }
+ window.__ESITE_ASSETS__=urls;
+ addEventListener('pagehide',event=>{if(!event.persisted)for(const url of created)URL.revokeObjectURL(url)});
+ const doc=new DOMParser().parseFromString(archive.html,'text/html');
+ document.title=doc.title||'E-site';
+ document.querySelector('meta[name="color-scheme"]')?.remove();
+ const scheme=doc.head.querySelector('meta[name="color-scheme"]');if(scheme)document.head.append(scheme.cloneNode(true));
+ for(const meta of doc.head.querySelectorAll('meta[name="description"],meta[property]'))document.head.append(meta.cloneNode(true));
+ const styles=[];
+ for(const link of doc.head.querySelectorAll('link[rel="stylesheet"],link[rel="preconnect"],link[rel="icon"]')){
+  const clone=link.cloneNode(true),path=localPath(link.getAttribute('href')||'',archive.base);
+  if(path&&urls[path])clone.href=urls[path];
+  if(clone.rel==='stylesheet'&&path)styles.push(new Promise((resolve,reject)=>{clone.onload=resolve;clone.onerror=()=>reject(new Error('style'))}));
+  document.head.append(clone);
+ }
+ const scripts=[...doc.querySelectorAll('script[type="module"][src]')].map(script=>localPath(script.getAttribute('src'),archive.base));
+ if(scripts.length!==1||!urls[scripts[0]])throw new Error('archive');
+ await Promise.all(styles);
+ doc.body.querySelectorAll('script').forEach(script=>script.remove());
+ document.querySelector('#esite-gate-style').remove();
+ document.documentElement.removeAttribute('style');
+ document.body.replaceChildren(...doc.body.childNodes);
+ for(const attribute of doc.body.attributes)document.body.setAttribute(attribute.name,attribute.value);
+ await import(urls[scripts[0]]);
+ let anchor;try{anchor=decodeURIComponent(location.hash.slice(1))}catch{}
+ if(anchor){let frames=0;const reveal=()=>{const target=document.getElementById(anchor);if(target)target.scrollIntoView({block:'start',behavior:'instant'});else if(++frames<120)requestAnimationFrame(reveal)};requestAnimationFrame(reveal)}
+}
+form.addEventListener('submit',async event=>{
+ event.preventDefault();if(button.disabled)return;
+ if(!crypto?.subtle||typeof DecompressionStream==='undefined'){status.textContent='Otwórz stronę w aktualnej wersji Safari, Chrome, Firefox lub Edge.';status.dataset.error='';return}
+ button.disabled=true;field.disabled=true;delete status.dataset.error;status.textContent='Otwieramy stronę…';
+ let password=field.value;field.value='';let unlocked=false;
+ try{
+  const buffer=await payload(),raw=new Uint8Array(buffer),header=raw.slice(0,40);
+  if(new TextDecoder().decode(header.slice(0,8))!=='ESITE01\0')throw new Error('archive');
+  const iterations=new DataView(buffer).getUint32(8,false);if(iterations!==600000)throw new Error('archive');
+  const material=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveKey']);password='';
+  const key=await crypto.subtle.deriveKey({name:'PBKDF2',salt:header.slice(12,28),iterations,hash:'SHA-256'},material,{name:'AES-GCM',length:256},false,['decrypt']);
+  const packed=await crypto.subtle.decrypt({name:'AES-GCM',iv:header.slice(28,40),additionalData:header,tagLength:128},key,raw.slice(40));
+  const text=await new Response(new Blob([packed]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+  const archive=JSON.parse(text);if(archive.version!==1||!Array.isArray(archive.files)||typeof archive.html!=='string')throw new Error('archive');
+  unlocked=true;await openSite(archive);
+ }catch(error){
+  password='';
+  if(unlocked){document.body.textContent='Nie udało się uruchomić strony. Odśwież i spróbuj ponownie.';return}
+  status.textContent=error?.name==='OperationError'?'Nieprawidłowe hasło. Spróbuj ponownie.':error?.message==='network'?'Nie udało się pobrać strony. Sprawdź połączenie i spróbuj ponownie.':'Nie udało się otworzyć strony. Odśwież i spróbuj ponownie.';status.dataset.error='';button.disabled=false;field.disabled=false;field.focus();
+ }
+});
+</script></body></html>
