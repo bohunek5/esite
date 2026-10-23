@@ -29,6 +29,12 @@ async function openSite(manifest, key) {
   })
   const doc = new DOMParser().parseFromString(manifest.html, 'text/html')
   document.title = doc.title
+  // Apply the explicit visitor choice before the app CSS can paint its first frame.
+  let theme = 'night'
+  try { if (localStorage.getItem('esite-theme-choice') === 'day') theme = 'day' } catch {}
+  document.documentElement.dataset.theme = theme
+  document.documentElement.style.colorScheme = theme === 'night' ? 'dark' : 'light'
+  document.querySelector('meta[name="color-scheme"]')?.setAttribute('content', theme === 'night' ? 'dark' : 'light')
   const loaded = []
   for (const link of doc.head.querySelectorAll('link[rel="stylesheet"],link[rel="icon"]')) {
     const clone = link.cloneNode(true)
@@ -62,6 +68,9 @@ form.addEventListener('submit', async event => {
     await openSite(manifest, key)
   } catch (error) {
     password = ''; session = null
+    document.documentElement.dataset.theme = 'night'
+    document.documentElement.style.colorScheme = 'dark'
+    document.querySelector('meta[name="color-scheme"]')?.setAttribute('content', 'dark')
     navigator.serviceWorker?.controller?.postMessage({ type: 'esite-lock' })
     if (!document.body.contains(form)) document.body.replaceChildren(...gateNodes)
     if (!gateStyle.isConnected) document.head.append(gateStyle)
