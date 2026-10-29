@@ -52,7 +52,7 @@ async function openSite(manifest, key) {
 form.addEventListener('submit', async event => {
   event.preventDefault(); if (button.disabled) return
   if (!crypto?.subtle || !navigator.serviceWorker || typeof DecompressionStream === 'undefined') { status.textContent = 'Otwórz stronę w aktualnej wersji Chrome, Safari, Firefox lub Edge.'; return }
-  button.disabled = true; field.disabled = true; username.disabled = true; delete status.dataset.error; status.textContent = 'Otwieramy Twój cyfrowy świat…'
+  button.disabled = true; field.disabled = true; username.disabled = true; delete status.dataset.error; status.textContent = 'Otwieramy stronę…'
   let password = field.value; const login = username.value.trim(); field.value = ''
   try {
     const response = await fetch(new URL('payload.bin', root), { cache: 'no-store' })
