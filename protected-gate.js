@@ -1,6 +1,6 @@
 const base = '/esite/'
 const root = new URL(base, location.origin)
-const form = document.querySelector('#entry-form'), field = document.querySelector('#entry-password'), button = document.querySelector('#entry-submit'), status = document.querySelector('#entry-status')
+const form = document.querySelector('#entry-form'), field = document.querySelector('#entry-password'), username = document.querySelector('#entry-username'), button = document.querySelector('#entry-submit'), status = document.querySelector('#entry-status')
 let session = null
 const gateNodes = [...document.body.childNodes], gateStyle = document.querySelector('#esite-gate-style')
 const appLinks = []
@@ -52,16 +52,16 @@ async function openSite(manifest, key) {
 form.addEventListener('submit', async event => {
   event.preventDefault(); if (button.disabled) return
   if (!crypto?.subtle || !navigator.serviceWorker || typeof DecompressionStream === 'undefined') { status.textContent = 'Otwórz stronę w aktualnej wersji Chrome, Safari, Firefox lub Edge.'; return }
-  button.disabled = true; field.disabled = true; delete status.dataset.error; status.textContent = 'Otwieramy Twój cyfrowy świat…'
-  let password = field.value; field.value = ''
+  button.disabled = true; field.disabled = true; username.disabled = true; delete status.dataset.error; status.textContent = 'Otwieramy Twój cyfrowy świat…'
+  let password = field.value; const login = username.value.trim(); field.value = ''
   try {
     const response = await fetch(new URL('payload.bin', root), { cache: 'no-store' })
     if (!response.ok) throw new Error('network')
     const buffer = await response.arrayBuffer(), raw = new Uint8Array(buffer), header = raw.slice(0, 40)
-    if (new TextDecoder().decode(header.slice(0, 8)) !== 'ESITE02\0') throw new Error('format')
+    if (new TextDecoder().decode(header.slice(0, 8)) !== 'ESITE03\0') throw new Error('format')
     const iterations = new DataView(buffer).getUint32(8, false)
     if (iterations !== 600000) throw new Error('format')
-    const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']); password = ''
+    const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(login + '\0' + password), 'PBKDF2', false, ['deriveKey']); password = ''
     const key = await crypto.subtle.deriveKey({ name: 'PBKDF2', salt: header.slice(12, 28), iterations, hash: 'SHA-256' }, material, { name: 'AES-GCM', length: 256 }, false, ['decrypt'])
     const packed = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: header.slice(28, 40), additionalData: header }, key, raw.slice(40))
     const manifest = JSON.parse(await new Response(new Blob([packed]).stream().pipeThrough(new DecompressionStream('gzip'))).text())
@@ -75,7 +75,7 @@ form.addEventListener('submit', async event => {
     if (!document.body.contains(form)) document.body.replaceChildren(...gateNodes)
     if (!gateStyle.isConnected) document.head.append(gateStyle)
     for (const link of appLinks.splice(0)) link.remove()
-    status.textContent = error?.name === 'OperationError' ? 'Nieprawidłowe hasło. Spróbuj ponownie.' : 'Nie udało się otworzyć strony. Odśwież i spróbuj ponownie.'
-    status.dataset.error = ''; button.disabled = false; field.disabled = false; field.focus()
+    status.textContent = error?.name === 'OperationError' ? 'Nieprawidłowy login lub hasło. Spróbuj ponownie.' : 'Nie udało się otworzyć strony. Odśwież i spróbuj ponownie.'
+    status.dataset.error = ''; button.disabled = false; field.disabled = false; username.disabled = false; field.focus()
   }
 })
